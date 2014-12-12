@@ -2,6 +2,10 @@ var arduino = { comName : "", pnpId : "usb-Arduino" };
 
 var qed = [];
 
+var ChorusSpeech = require( './ChorusSpeech.js' );
+var cs = new ChorusSpeech();
+cs.setRate( 200 );
+
 var serialPort = require("serialport");
 serialPort.list(function (err, ports) {
   ports.forEach(function(port) {
@@ -74,6 +78,10 @@ var MagController = function( port, pad ) {
     self.maxAccelY = 6000;
     self.currentAccelX = 6000;
     self.currentAccelY = 5000;
+    self.mixX = 100;
+    self.minY = 100;
+    self.maxX = 2100;
+    self.maxY = 2100;
     self.stepX = 50;
     self.stepY = 50;
     self.anchorX = 1000;
@@ -89,6 +97,11 @@ var MagController = function( port, pad ) {
     self.hatMoveYInterval = [];
     
     // callee functions
+    self.announceStepChange = function( ax ) {
+        if( ax == 'V' ) cs.say( "Vertical Step: " + self.stepY );
+        else if( ax == 'H' )cs.say( "Horizontal Step: " + self.stepX );
+    };
+
     self.sendCease = function( ax ) {
         if( ax == "X" && self.currentHorDir != "STOPPED" ){ 
             self.currentHorDir = "STOPPED";
@@ -108,6 +121,7 @@ var MagController = function( port, pad ) {
         var pct = Math.floor( map( moved.value + 1, 0, 2, self.minSpeedX, self.maxSpeedX ) );
         qed[0] = ( "setMspX" + pct );
         qed[1] = ( "setMspY" + pct );
+        cs.say( "Speed: " + pct );
     };
     
     self.hatMove = function( ax, moved ) {
@@ -211,15 +225,19 @@ var MagController = function( port, pad ) {
         switch( id ){
             case 0 : // TRIGGER
                 qed.push( "ancNxl" );
+            cs.say( "Next line" );
             break;
             case 1 : // thumbpress
                 qed.push( "ancPut" );
+                cs.say( "Anchor placed" );
             break;
             case 2 : // hat bootom left
                 qed.push( "ancHom" );
+                cs.say( "To anchor" );
             break;
             case 3 : // hat bootom right
                 qed.push( "ancPvl" );
+                cs.say( "Previous line" );
             break;
             
             case 4 :  // hat top left
@@ -239,18 +257,30 @@ var MagController = function( port, pad ) {
             
             case 6 : // 11oclock outer
                 qed.push( "stepIncVer" );
+                self.stepY += 20;
+                if( self.stepY > self.maxY ) self.stepY = self.maxY;
+                self.announceStepChange( 'V' );
             break;
             
             case 7 : // 11oclock inner
                 qed.push( "stepDecVer" );
+                self.stepY -= 20;
+                if( self.stepY < 10 ) self.stepY = 10
+                self.announceStepChange( 'V' );
             break;
             
             case 8 : // 10oclock outer
                 qed.push( "stepIncHor" );
+                self.stepX += 40;
+                if( self.stepX > self.maxX ) self.stepX = self.maxX;
+                self.announceStepChange( 'H' );
             break;
             
             case 9 : // 10oclock inner
                 qed.push( "stepDecHor" );
+	        self.stepX -= 40;
+                if( self.stepX < 10 ) self.stepX = 10;
+                self.announceStepChange( 'H' );
             break;
             
             case 10 : // 9oclock outer
@@ -425,11 +455,4 @@ setInterval( function() {
 
 // running
 var daController = new MagController( serialPort, Gamepad );
-setTimeout( function(  ){ 
-    qed.push( "motionCrawl" );
-    qed.push( "setAccX6000" );
-    qed.push( "setAccY6000" );
-    setTimeout( function() {  
-        qed.push( "motionZoom" );
-    }, 5000 );
-} , 10000 );
+
